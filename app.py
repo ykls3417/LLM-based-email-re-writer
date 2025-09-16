@@ -1,8 +1,13 @@
+from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 from typing import Dict, Any
 from openai import OpenAI
 import os
-from dotenv import load_dotenv,find_dotenv
+from dotenv import load_dotenv, find_dotenv
+import json
 
+app = Flask(__name__, static_folder='frontend/build', static_url_path='')
+CORS(app)
 
 class EmailRewriter:
     def __init__(self, model="deepseek/deepseek-chat-v3-0324:free", temperature=0.7, max_tokens=120, provider="auto", token=None):
@@ -15,10 +20,6 @@ class EmailRewriter:
 
     def rewrite(self, email_text: str, reason: str, other_instruction: str) -> Dict[str, Any]:
         completion = self.client.chat.completions.create(
-            # extra_headers={
-            #     "HTTP-Referer": "<YOUR_SITE_URL>", # Optional. Site URL for rankings on openrouter.ai.
-            #     "X-Title": "<YOUR_SITE_NAME>", # Optional. Site title for rankings on openrouter.ai.
-            # },
             extra_body={},
             model="deepseek/deepseek-chat-v3-0324:free",
             messages=[
@@ -44,23 +45,45 @@ class EmailRewriter:
             ]
         )
         try:
-            return completion.choices[0].message.content
+            content = completion.choices[0].message.content
+            
+            # Try to parse as JSON, if it fails return the raw content
+            try:
+                content = content.replace('```json\n', '').replace('\n```', '').strip()
+                return json.loads(content)
+            except json.JSONDecodeError:
+                return {"error": "Failed to parse response", "raw_content": content}
         except Exception as e:
-            print(e)
-            return ""
+            return {"error": str(e)}
 
+@app.route('/')
+def serve_frontend():
+    return app.send_static_file('index.html')
 
-def rewrite_email(reason, email_text, instruction, **kwargs):
-    rewriter = EmailRewriter(**kwargs)
-    return rewriter.rewrite(email_text, reason, instruction)
+@app.route('/api/rewrite', methods=['POST'])
+def rewrite_email():
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        reason = data.get('reason', '')
+        email_text = data.get('email_text', '')
+        instruction = data.get('instruction', '')
+        
+        if not all([reason, email_text, instruction]):
+            return jsonify({"error": "Missing required fields: reason, email_text, instruction"}), 400
+        
+        rewriter = EmailRewriter()
+        result = rewriter.rewrite(email_text, reason, instruction)
+        
+        print(result)
 
-
-if __name__ == "__main__":
-    # Simple example usage
-    reason = "I, Marco Ho, as a student, want to have a quick meeting with the professor to discuss the project, on tmr afternoon."
-
-    email_text = "Hi, can we meet tmrw? Thx!"
-
-    instruction = "Be police and concise"
+        return jsonify(result)
     
-    print(rewrite_email(reason, email_text, instruction))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
