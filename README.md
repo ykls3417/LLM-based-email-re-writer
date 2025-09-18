@@ -1,42 +1,50 @@
-# ✨ Email Rewriter
+# Email Rewriter
 
-A full-stack web application that uses AI to rewrite emails into professional, polished messages. Built with Flask backend and React frontend.
+Email Rewriter is a small full‑stack application that turns draft emails into clear, professional messages using an LLM. It includes a Flask backend and a React frontend (served as a static build by Flask).
 
-## 🚀 Features
+## What it does
 
-- **AI-Powered Rewriting**: Uses DeepSeek AI model via OpenRouter API
-- **Professional Output**: Generates properly formatted emails with subject, recipient, sender, date, and body
-- **Modern UI**: Clean, bright, and responsive design
-- **Easy Deployment**: Ready for local development and web deployment
+- Accepts three inputs: reason for the email, your draft email text, and any specific instructions.
+- Calls an LLM to rewrite the email while preserving key facts, dates, and requests.
+- Presents the rewritten email with Subject, To, From, Body, and an optional caution note.
+- Provides a Copy Rewritten Email button to copy the body text to your clipboard with a confirmation toast.
+- Includes a left settings sidebar where you can set your own API key, model, and base URL. These values override server defaults and are stored locally in your browser (localStorage) for convenience.
 
-## 📋 Requirements
+## Advantages
 
-- Python 3.11+
-- Node.js 16+
-- OpenRouter API key
+- Flexible model and provider: set your own model and base URL to use OpenAI‑compatible APIs (e.g., OpenRouter).
+- No server‑side storage: the app does not persist your content or keys on the server; settings are stored only in your browser.
+- Time‑aware prompt hints: gently nudges the model to interpret time references relative to the current date when such references appear.
+- Robust JSON handling: retries and cleans common wrappers to improve response parsing resilience.
+- Simple deployment: single Flask service can serve both the API and the static React build.
 
-## 🛠️ Local Setup
+## Run locally
 
-### 1. Clone the repository
-```bash
-git clone <your-repo-url>
-cd LLM-based-email-re-writer
-```
+Prerequisites:
 
-### 2. Set up environment variables
-Create a `.env` file in the root directory:
-```bash
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-```
+- Python 3.10+
+- Node.js 18+ (only needed if you want to rebuild the frontend)
 
-Get your API key from [OpenRouter](https://openrouter.ai/)
+1) Clone and install backend dependencies
 
-### 3. Install Python dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Install Node.js dependencies and build frontend
+Optionally, set a default API key for the backend process (you can still override it in the UI):
+
+```bash
+# PowerShell (Windows)
+$env:OPENROUTER_API_KEY = "sk-..."
+
+# Bash
+export OPENROUTER_API_KEY="sk-..."
+```
+
+2) (Optional) Build the frontend
+
+If you want to modify the UI or rebuild the static assets:
+
 ```bash
 cd frontend
 npm install
@@ -44,129 +52,33 @@ npm run build
 cd ..
 ```
 
-### 5. Run the application
+3) Start the app
+
 ```bash
 python app.py
 ```
 
-The app will be available at `http://localhost:5000`
+Open http://localhost:5000 in your browser.
 
-## 🌐 Usage
+Using your own key and model without environment variables:
 
-1. **Reason for Email**: Briefly explain the purpose of your email
-2. **Draft Email**: Enter your rough draft email text
-3. **Instructions**: Specify how you want the email rewritten (e.g., "Be polite and concise")
+- Open the Settings sidebar (left side of the page).
+- Enter your API key, model name, and base URL.
+- Submit your email for rewriting; these values will be sent only with your requests and saved locally in your browser.
 
-### Example Input:
-- **Reason**: "I, Marco Ho, as a student, want to have a quick meeting with the professor to discuss the project, on tmr afternoon."
-- **Draft Email**: "Hi, can we meet tmrw? Thx!"
-- **Instructions**: "Be polite and concise"
+Notes:
 
-### Example Output:
-```json
-{
-  "subject": "Meeting Request for Project Discussion",
-  "recipient": "Professor [Name]",
-  "sender": "Marco Ho",
-  "date": "Tomorrow",
-  "body": "Dear Professor,\n\nI hope this email finds you well. I am writing to request a brief meeting to discuss the project we are working on. Would tomorrow afternoon be convenient for you?\n\nThank you for your time.\n\nBest regards,\nMarco Ho"
-}
-```
+- By default, the server uses `https://openrouter.ai/api/v1` and the model `deepseek/deepseek-chat-v3-0324:free` unless you override them via the Settings sidebar or environment variable.
+- The backend serves the static React build from `frontend/build`. If you run a separate React dev server, you will need to configure a proxy to the Flask API; this repository is configured to serve the production build directly.
 
-## 🚀 Deployment
+## License
 
-### Option 1: Heroku Deployment
+This project is licensed under the MIT License. See `LICENSE` for details.
 
-1. Create a Heroku app:
-```bash
-heroku create your-app-name
-```
+## Contributing
 
-2. Set environment variables:
-```bash
-heroku config:set OPENROUTER_API_KEY=your_api_key
-```
-
-3. Build and deploy:
-```bash
-chmod +x build.sh
-./build.sh
-git add .
-git commit -m "Deploy email rewriter"
-git push heroku main
-```
-
-### Option 2: Railway Deployment
-
-1. Connect your GitHub repository to Railway
-2. Add environment variable `OPENROUTER_API_KEY`
-3. Railway will automatically detect and deploy the Flask app
-
-### Option 3: Render Deployment
-
-1. Connect your GitHub repository to Render
-2. Create a new Web Service
-3. Set environment variable `OPENROUTER_API_KEY`
-4. Deploy
-
-## 📁 Project Structure
-
-```
-LLM-based-email-re-writer/
-├── app.py                 # Flask backend
-├── requirements.txt       # Python dependencies
-├── Procfile              # Heroku deployment config
-├── runtime.txt           # Python version
-├── build.sh              # Build script
-├── .env                  # Environment variables (create this)
-├── frontend/
-│   ├── package.json      # Node.js dependencies
-│   ├── public/
-│   │   └── index.html
-│   └── src/
-│       ├── App.js        # Main React component
-│       ├── App.css       # Styles
-│       ├── index.js      # React entry point
-│       └── index.css     # Global styles
-└── README.md
-```
-
-## 🔧 Development
-
-### Running in Development Mode
-
-1. **Backend** (Terminal 1):
-```bash
-python app.py
-```
-
-2. **Frontend** (Terminal 2):
-```bash
-cd frontend
-npm start
-```
-
-The frontend will run on `http://localhost:3000` with hot reloading.
-
-### API Endpoints
-
-- `GET /` - Serves the React frontend
-- `POST /api/rewrite` - Rewrites email based on provided data
-
-## 🎨 Customization
-
-The UI is designed to be bright, clean, and modern. You can customize the styling by modifying:
-- `frontend/src/App.css` - Main component styles
-- `frontend/src/index.css` - Global styles
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Fork the repository.
+2. Create your feature branch: `git checkout -b feature/your-feature`.
+3. Commit your changes: `git commit -m "Add your feature"`.
+4. Push to the branch: `git push origin feature/your-feature`.
+5. Open a Pull Request.
