@@ -1,5 +1,4 @@
-from flask import Flask, request, jsonify, render_template
-from flask_cors import CORS
+from flask import Flask, request, jsonify, send_from_directory
 from typing import Dict, Any
 from openai import OpenAI
 import os
@@ -8,15 +7,17 @@ import json
 import datetime
 import re
 
-app = Flask(__name__, static_folder='frontend/build', static_url_path='')
-CORS(app)
+# Initialize Flask app with static folder pointing to React build
+app = Flask(__name__, static_folder="../frontend/build", static_url_path="")
+
+# Load environment variables
+load_dotenv(find_dotenv())
 
 class EmailRewriter:
     def __init__(self, model="deepseek/deepseek-chat-v3-0324:free", user_apikey=None, base_url="https://openrouter.ai/api/v1"):
-        load_dotenv(find_dotenv())
         self.client = OpenAI(
-            base_url = base_url,
-            api_key = user_apikey if user_apikey else os.getenv('OPENROUTER_API_KEY'),
+            base_url=base_url,
+            api_key=user_apikey if user_apikey else os.getenv('OPENROUTER_API_KEY'),
         )
         self.model = model
 
@@ -36,12 +37,10 @@ class EmailRewriter:
         )
         has_time_refs = bool(time_keywords.search(email_text + reason + other_instruction))
         if has_time_refs:
-            # Get current date for prompt injection
             current_date = datetime.date.today().strftime("%Y-%m-%d")
-        
             other_instruction += f"\n- Ensure all temporal references align with the current date: {current_date}, and carefully identify if the event in content happened before or after current time."
 
-        # Prepare the prompt
+        # Prepare the prompt (unchanged)
         prompt = f"""You are a professional email rewriter, expert in crafting clear, effective emails for various audiences.
 
 **Context**: You are given:
@@ -52,7 +51,7 @@ class EmailRewriter:
 - User instructions: 
 {other_instruction}
 
-**Objective**: Rewrite the email to fulfill the user's instructions, preserving all key facts, dates, and requests from the original. Improve clarity, grammar, and structure. If subject, recipient, or sender are not explicit in the inputs, infer or generate suitable ones based on the content and reason. If information seems outdated or unavailable, avoid speculating and note in the caution field (e.g., 'Based on available information as of {current_date}'). If anything in the email is unsure or made up by you, which you have to remind user, you must note in the caution field.
+**Objective**: Rewrite the email to fulfill the user's instructions, preserving all key facts, dates, and requests from the original. Improve clarity, grammar, and structure. If subject, recipient, or sender are not explicit in the inputs, infer or generate suitable ones based on the content and reason. If information seems outdated or unavailable, avoid speculating and note in the caution field (e.g., 'Based on available information as of current date, the [placeholder] have not been filled'). If anything in the email is unsure or made up by you, which you have to remind user, you must note in the caution field.
 
 **Style**: Keep it concise, professional, and error-free. Use standard email formatting (e.g., greeting, body paragraphs, closing).
 
@@ -65,7 +64,7 @@ class EmailRewriter:
     "subject": "Email subject",
     "recipient": "Recipient name or email",
     "sender": "Sender name or email",
-    "body": "Full email body including greeting and sign-off"
+    "body": "Full email body including greeting and sign-off",
     "caution": "Any caution or reminder about the email that user should know"
 }}
 """
@@ -77,58 +76,43 @@ class EmailRewriter:
                 completion = self.client.chat.completions.create(
                     extra_body={},
                     model=self.model,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ]
+                    messages=[{"role": "user", "content": prompt}]
                 )
                 content = completion.choices[0].message.content.strip()
-                
-                # Clean up common LLM wrappers
                 content = content.replace('```json\n', '').replace('\n```', '').replace('```', '')
-                
-                # Parse JSON
                 parsed_response = json.loads(content)
-
                 print(f"INPUT PROMPT:\n{prompt}\n\nOUTPUT PARSED RESULT:\n{json.dumps(parsed_response, indent=2)}")
-                
                 return parsed_response
-            
             except Exception as e:
-                # For API call errors or if out of retries, return error
                 error_type = type(e).__name__
                 error_msg = f"{error_type}: {str(e)}"
-
-                # If it's not the last attempt, retry only on JSON parse error
                 if attempt < max_retries - 1:
                     print(f"Attempt {attempt} failed: API call or JSON parse failed: {error_msg}")
-                    continue  # Retry 
-                
-                # Try to include raw response if available, else None
+                    continue
                 raw_response = content if 'content' in locals() else None
                 return {
                     "error": f"API call or JSON parse failed: {error_msg}",
                     "raw_response": raw_response
                 }
 
-@app.route('/')
-def serve_frontend():
-    return app.send_static_file('index.html')
+# Serve React frontend for all non-API routes
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/api/rewrite', methods=['POST'])
 def rewrite_email():
     try:
         data = request.get_json()
-        
         if not data:
             return jsonify({"error": "No data provided"}), 400
         
         reason = data.get('reason', '')
         email_text = data.get('email_text', '')
         instruction = data.get('instruction', '')
-        # optional overrides from client
         user_model = data.get('model')
         user_api_key = data.get('api_key')
         user_base_url = data.get('base_url')
@@ -136,18 +120,16 @@ def rewrite_email():
         if not all([reason, email_text, instruction]):
             return jsonify({"error": "Missing required fields: reason, email_text, instruction"}), 400
         
-        # instantiate with optional overrides if provided
         rewriter = EmailRewriter(
             model=user_model if user_model else "deepseek/deepseek-chat-v3-0324:free",
             user_apikey=user_api_key if user_api_key else None,
             base_url=user_base_url if user_base_url else "https://openrouter.ai/api/v1"
         )
         result = rewriter.rewrite(email_text, reason, instruction)
-
         return jsonify(result)
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
