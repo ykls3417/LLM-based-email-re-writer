@@ -28,6 +28,7 @@ Prerequisites:
 1) Clone and install backend dependencies
 
 ```bash
+cd backend
 pip install -r requirements.txt
 ```
 
@@ -55,6 +56,7 @@ cd ..
 3) Start the app
 
 ```bash
+cd backend
 python app.py
 ```
 
