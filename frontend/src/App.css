@@ -6,12 +6,27 @@
   padding: 20px;
 }
 
+.field-hint {
+  font-size: 0.85rem;
+  color: #6b7280; /* Matches form-hint neutral gray */
+  display: block; /* Ensures hint is on its own line */
+  margin: 6px 0; /* Spacing between label and textarea */
+}
+
+.form-hint {
+  font-size: 0.9rem;
+  color: #6b7280; /* Neutral gray, similar to sidebar-hint */
+  margin: 10px 0;
+  line-height: 1.4;
+}
+
 .sidebar {
   position: fixed;
   top: 0;
   left: 0;
   height: 100vh;
-  width: 300px;
+  width: 300px; /* Default width for large screens */
+  max-width: 80vw; /* Prevent sidebar from being too wide on small screens */
   background: #0f172a;
   color: #e2e8f0;
   box-shadow: 2px 0 16px rgba(0,0,0,0.2);
@@ -23,16 +38,17 @@
 }
 
 .sidebar.closed {
-  transform: translateX(-260px);
+  transform: translateX(-100%); /* Fully hide sidebar when closed */
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 16px;
+  justify-content: flex-start; /* Align header content to left */
+  padding: 16px;
   background: #111827;
   border-bottom: 1px solid rgba(255,255,255,0.08);
+  position: relative; /* Allow toggle to be positioned absolutely */
 }
 
 .sidebar-header h2 {
@@ -42,12 +58,26 @@
 }
 
 .sidebar-toggle {
-  background: transparent;
+  position: absolute;
+  right: 8px; /* Place toggle on right side of sidebar */
+  top: 50%;
+  transform: translateY(-50%); /* Center vertically */
+  background: #0f172a7b;;
   border: 1px solid rgba(255,255,255,0.2);
   color: #e5e7eb;
   border-radius: 8px;
   padding: 4px 8px;
   cursor: pointer;
+  font-size: 1.2rem; /* Larger for } symbol */
+  line-height: 1;
+  /* width: 1lh; Fixed width for consistency */
+  text-align: center; /* Center the }/{ symbols */
+}
+
+/* Keep toggle visible when sidebar is closed */
+.sidebar.closed .sidebar-toggle {
+  transform: translate(100%, -50%); /* Move toggle to left edge of screen */
+  z-index: 1001; /* Ensure toggle is above other elements */
 }
 
 .sidebar-content {
@@ -88,7 +118,13 @@
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(10px);
   overflow: hidden;
-  margin-left: 320px;
+  margin-left: 320px; /* Default margin for large screens with sidebar open */
+  transition: margin-left 0.25s ease; /* Smooth transition when sidebar toggles */
+}
+
+/* Adjust container margin when sidebar is closed */
+.App:has(.sidebar.closed) .container {
+  margin-left: 40px; /* Small margin to avoid toggle button overlap */
 }
 
 .header {
@@ -295,32 +331,87 @@
   word-break: break-word;
 }
 
-@media (max-width: 768px) {
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 260px; /* Slightly narrower for medium screens */
+  }
   .container {
+    margin-left: 280px; /* Adjust for narrower sidebar */
+  }
+  .App:has(.sidebar.closed) .container {
+    margin-left: 40px; /* Space for toggle */
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%; /* Full width on mobile */
+    max-width: 100%;
+    transform: translateX(-100%); /* Hidden by default on small screens */
+  }
+  .sidebar.open {
+    transform: translateX(0); /* Show when toggled */
+  }
+  .container {
+    margin-left: 40px; /* Space for toggle */
     margin: 10px;
     border-radius: 16px;
   }
-  .sidebar {
-    width: 260px;
+  .sidebar-toggle {
+    right: 8px; /* Keep toggle on right side */
   }
-  .container {
-    margin-left: 20px;
+  .sidebar.closed .sidebar-toggle {
+    transform: translate(100%, -50%); /* Toggle stays on left edge */
   }
-  
   .header {
     padding: 30px 20px 15px;
   }
-  
   .header h1 {
     font-size: 2rem;
   }
-  
   .content {
     padding: 30px 20px;
   }
-  
   .email-header,
   .email-body {
     padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .App {
+    padding: 10px;
+  }
+  .container {
+    max-width: 100%;
+    margin-left: 40px; /* Space for toggle */
+  }
+  .header h1 {
+    font-size: 1.8rem;
+  }
+  .header p {
+    font-size: 1rem;
+  }
+  .form-group textarea {
+    padding: 12px;
+    font-size: 0.9rem;
+    min-height: 80px;
+  }
+  .submit-btn {
+    font-size: 1rem;
+    padding: 12px;
+  }
+  .result {
+    padding: 20px;
+  }
+  .email-preview {
+    font-size: 0.9rem;
+  }
+  .email-body {
+    padding: 15px;
+  }
+  .actions {
+    padding: 0 15px 15px;
   }
 }

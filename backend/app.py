@@ -1,3 +1,4 @@
+import email
 from flask import Flask, request, jsonify, send_from_directory
 from typing import Dict, Any
 from openai import OpenAI
@@ -53,7 +54,7 @@ class EmailRewriter:
 
 **Objective**: Rewrite the email to fulfill the user's instructions, preserving all key facts, dates, and requests from the original. Improve clarity, grammar, and structure. If subject, recipient, or sender are not explicit in the inputs, infer or generate suitable ones based on the content and reason. If information seems outdated or unavailable, avoid speculating and note in the caution field (e.g., 'Based on available information as of current date, the [placeholder] have not been filled'). If anything in the email is unsure or made up by you, which you have to remind user, you must note in the caution field.
 
-**Style**: Keep it concise, professional, and error-free. Use standard email formatting (e.g., greeting, body paragraphs, closing).
+**Style**: Keep it concise, professional, and error-free. Use standard email formatting (e.g., greeting, body paragraphs, closing). You are not allowed to use "I hope this email finds you well"..
 
 **Tone**: Default to polite and formal; adjust based on audience (e.g., warmer for colleagues, neutral for clients, respectful for academic professionals) or user instructions.
 
@@ -85,13 +86,43 @@ class EmailRewriter:
                 return parsed_response
             except Exception as e:
                 error_type = type(e).__name__
-                error_msg = f"{error_type}: {str(e)}"
+                error_msg = str(e)
+                user_message = None
+                raw_response = locals().get('content', None)
+
+                # Handle OpenAI API errors specifically
+                if hasattr(e, 'status_code'):
+                    if e.status_code == 403:
+                        user_message = "Access denied: Invalid API key or insufficient permissions. Please check your API key in settings or use your own key."
+                    elif e.status_code == 429:
+                        error_body = e.body if hasattr(e, 'body') else {}
+                        user_message = "Rate limit exceeded: Too many requests. Please wait a moment and try again."
+                        # Check for upstream error in message (OpenRouter-specific)
+                        if 'upstream' in error_msg.lower():
+                            user_message = "Service temporarily unavailable due to upstream error. Please try again later."
+                        elif error_body.get('error', {}).get('metadata', {}).get('headers', {}).get('X-RateLimit-Reset'):
+                            reset_time_ms = int(error_body['error']['metadata']['headers']['X-RateLimit-Reset'])
+                            # Convert milliseconds to datetime (UTC)
+                            reset_time = datetime.datetime.fromtimestamp(reset_time_ms / 1000, tz=datetime.timezone.utc)
+                            # Format reset time for user's local timezone (assuming UTC for simplicity)
+                            reset_time_str = reset_time.strftime('%Y-%m-%d %I:%M %p UTC')
+                            user_message = f"Rate limit exceeded: Free model requests limit reached. Please try again after {reset_time_str} or add credits for more requests."
+                            
+                    else:
+                        user_message = f"API error: {error_msg}"
+                # Handle JSON parsing errors
+                elif error_type == 'JSONDecodeError':
+                    user_message = "Invalid response format from the API. Please try again or contact support."
+                # Fallback for other errors
+                else:
+                    user_message = f"An unexpected error occurred: {error_msg}. Please try again or contact support."
+
                 if attempt < max_retries - 1:
-                    print(f"Attempt {attempt} failed: API call or JSON parse failed: {error_msg}")
+                    print(f"Attempt {attempt} failed: {error_type}: {error_msg}")
                     continue
-                raw_response = content if 'content' in locals() else None
+
                 return {
-                    "error": f"API call or JSON parse failed: {error_msg}",
+                    "error": user_message,
                     "raw_response": raw_response
                 }
 
@@ -117,14 +148,34 @@ def rewrite_email():
         user_api_key = data.get('api_key')
         user_base_url = data.get('base_url')
         
-        if not all([reason, email_text, instruction]):
-            return jsonify({"error": "Missing required fields: reason, email_text, instruction"}), 400
+        # Check for missing fields and ensure at least 2 are provided
+        provided_fields = sum(1 for field in [reason, email_text, instruction] if field)
+        missing_fields = [
+            name for field, name in [
+                (reason, "Reason for Email"),
+                (email_text, "Draft Email"),
+                (instruction, "Instructions")
+            ] if not field
+        ]
+        if provided_fields < 2:
+            missing_fields_str = ', '.join(missing_fields)
+            fields_needed = 2 - provided_fields
+            return jsonify({
+                "error": f"Please provide {fields_needed} more field{'s' if fields_needed > 1 else ''}: {missing_fields_str}"
+            }), 400
         
         rewriter = EmailRewriter(
             model=user_model if user_model else "deepseek/deepseek-chat-v3-0324:free",
             user_apikey=user_api_key if user_api_key else None,
             base_url=user_base_url if user_base_url else "https://openrouter.ai/api/v1"
         )
+
+        if not email_text:
+            email_text = "N/A"
+        if not reason:
+            reason = "N/A"
+        if not instruction:
+            instruction = "N/A"
         result = rewriter.rewrite(email_text, reason, instruction)
         return jsonify(result)
     

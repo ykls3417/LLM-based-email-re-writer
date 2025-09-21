@@ -12,23 +12,27 @@ function App() {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // Settings sidebar state
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Settings sidebar state, closed by default on mobile
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
   const [settings, setSettings] = useState({
     api_key: '',
     model: '',
     base_url: ''
   });
 
-  // Load settings from localStorage on mount
+  // Load settings from localStorage and handle resize
   useEffect(() => {
     const stored = localStorage.getItem('email_rewriter_settings');
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
         setSettings(prev => ({ ...prev, ...parsed }));
-      } catch (_) {}
+      } catch (_) { }
     }
+
+    const handleResize = () => setIsSidebarOpen(window.innerWidth > 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleSettingsChange = (e) => {
@@ -62,7 +66,6 @@ function App() {
         },
         body: JSON.stringify({
           ...formData,
-          // optional settings
           api_key: settings.api_key?.trim() || undefined,
           model: settings.model?.trim() || undefined,
           base_url: settings.base_url?.trim() || undefined,
@@ -70,7 +73,7 @@ function App() {
       });
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Something went wrong');
       }
@@ -93,7 +96,7 @@ function App() {
             onClick={() => setIsSidebarOpen(o => !o)}
             aria-label={isSidebarOpen ? 'Close settings' : 'Open settings'}
           >
-            {isSidebarOpen ? '⟨' : '⟩'}
+            {isSidebarOpen ? '<' : '>'}
           </button>
         </div>
         {isSidebarOpen && (
@@ -134,7 +137,10 @@ function App() {
                 autoComplete="off"
               />
             </div>
-            <div className="sidebar-hint">Values here override server defaults for this session.</div>
+            <div className="sidebar-hint">
+              <span>Values here override server defaults for this session.</span><br /><br />
+              <span>These values is optional, and default free deepseek V3 will be used if not provided.</span>
+            </div>
           </div>
         )}
       </div>
@@ -154,33 +160,36 @@ function App() {
                 value={formData.reason}
                 onChange={handleInputChange}
                 placeholder="Briefly explain the purpose of your email..."
-                required
               />
             </div>
 
             <div className="form-group">
               <label htmlFor="email_text">Draft Email</label>
+              <span className="field-hint">Accept short and incomplete input (e.g., Hi, can we meet tmr?)</span>
               <textarea
                 id="email_text"
                 name="email_text"
                 value={formData.email_text}
                 onChange={handleInputChange}
                 placeholder="Enter your draft email here..."
-                required
               />
             </div>
 
             <div className="form-group">
               <label htmlFor="instruction">Instructions</label>
+              <span className="field-hint">Point form is recommended (e.g., - Be polite and concise)</span>
               <textarea
                 id="instruction"
                 name="instruction"
                 value={formData.instruction}
                 onChange={handleInputChange}
                 placeholder="e.g., Be polite and concise, Use formal tone..."
-                required
               />
             </div>
+
+            {!result && (
+              <p className="form-hint">P.S. Please fill at least 2 of the 3 fields to rewrite.</p>
+            )}
 
             <button type="submit" disabled={loading} className="submit-btn">
               {loading ? 'Rewriting...' : 'Rewrite Email'}
